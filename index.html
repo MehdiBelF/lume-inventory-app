@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>LUME Inventory — Secure Stock Management</title>
+  <meta name="description" content="LUME secure inventory with role-based access, visual search, Socrate sales, and Mediouna stock management." />
+  <meta name="theme-color" content="#0b0b0b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-shell">
+      <div class="auth-brand">
+        <div class="auth-logo">L</div>
+        <p class="eyebrow center">LUME Workspace</p>
+        <h1>Inventory Access</h1>
+        <p>Private stock management for authorized team members only.</p>
+      </div>
+
+      <section id="lockedNotice" class="auth-card locked-card" aria-label="Secure access notice">
+        <h2>Accès sécurisé</h2>
+        <p>La création publique du propriétaire est désactivée. Seul l’administrateur peut créer les utilisateurs depuis l’application.</p>
+      </section>
+
+      <section id="loginPanel" class="auth-card hidden" aria-label="Login">
+        <h2>Sign in</h2>
+        <p class="auth-note">Only users created by the administrator can enter this workspace.</p>
+        <label>Email<input id="loginEmail" type="email" autocomplete="username" placeholder="your@email.com" /></label>
+        <label>Password<input id="loginPin" type="password" autocomplete="current-password" placeholder="••••••••" /></label>
+        <button id="loginBtn" class="auth-btn">Enter workspace</button>
+        <p class="secure-note">No public demo password. Only active users added by admin can login.</p>
+      </section>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
+    <div class="loading-card"><div class="loading-spinner"></div><p id="loadingText">Loading inventory…</p></div>
+  </div>
+  <div id="errorBanner" class="error-banner" role="alert" aria-live="assertive"></div>
+
+  <div id="appContent" class="app-content hidden">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark">L</div>
+        <div>
+          <h1>LUME Inventory</h1>
+          <span>Secure stock · Socrate · Mediouna</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="user-chip" id="userChip" aria-label="Logged in user">
+          <div class="user-avatar" id="userAvatar">M</div>
+          <div class="user-copy"><strong id="userName">Mehdi</strong><span id="userRole" class="role-badge admin">Admin</span></div>
+        </div>
+        <button class="icon-btn" id="themeBtn" title="Theme" aria-label="Switch theme">◐</button>
+        <button class="icon-btn" id="logoutBtn" title="Logout" aria-label="Logout">↗</button>
+      </div>
+    </header>
+
+    <section class="stats-bar" aria-label="Inventory summary">
+      <div class="stat-item"><span id="totalProducts">0</span><label>Products</label></div>
+      <div class="stat-item"><span id="mediounaTotal">0</span><label>Mediouna</label></div>
+      <div class="stat-item"><span id="socrateTotal">0</span><label>Socrate</label></div>
+      <div class="stat-item warn"><span id="lowStockTotal">0</span><label>Low / Out</label></div>
+    </section>
+
+    <section class="toolbar" aria-label="Search and scan">
+      <div class="search-bar">
+        <span aria-hidden="true">⌕</span>
+        <input id="searchInput" type="search" placeholder="Search SKU, name, category, finition..." autocomplete="off" />
+        <button id="clearSearch" class="clear-search" aria-label="Clear search">×</button>
+      </div>
+      <button class="scan-btn" id="imageSearchBtn">📷 Scan</button>
+    </section>
+
+    <section class="filters" aria-label="Filters">
+      <select id="categoryFilter"><option value="all">All categories</option></select>
+      <select id="stockFilter">
+        <option value="all">All stock</option>
+        <option value="socrate">In Socrate</option>
+        <option value="mediouna">In Mediouna</option>
+        <option value="low">Low stock</option>
+        <option value="out">Out of stock</option>
+      </select>
+    </section>
+
+    <main>
+      <div id="resultsInfo" class="results-info"></div>
+      <div id="productGrid" class="product-grid"></div>
+      <div id="emptyState" class="empty-state"><div>🔍</div><strong>No products found</strong><span>Try another reference or clear filters.</span></div>
+    </main>
+
+    <nav class="admin-bar" id="adminBar" aria-label="Actions">
+      <button id="historyBtn">📋 History</button>
+      <button id="receiveBulkBtn" data-admin-only>📦 New BL</button>
+      <button id="newProductBtn" data-admin-only>＋ Product</button>
+      <button id="restoreBtn" data-admin-only>↩ Restore</button>
+      <button id="exportStockBtn">📊 Stock</button>
+      <button id="manageUsersBtn" data-admin-only>👥 Users</button>
+      <button id="backupBtn" data-admin-only>⬇ Backup</button>
+      <label data-admin-only>⬆ Import<input id="backupInput" type="file" accept="application/json" /></label>
+    </nav>
+  </div>
+
+  <div id="productModal" class="modal-shell" aria-hidden="true">
+    <section class="modal product-modal" role="dialog" aria-modal="true" aria-labelledby="modalNameTitle">
+      <header class="modal-header">
+        <button class="modal-back" data-close="productModal" aria-label="Close product">‹</button>
+        <div class="modal-title"><p class="eyebrow" id="modalCategory"></p><h2 id="modalNameTitle"></h2></div>
+      </header>
+      <div class="modal-body product-layout">
+        <aside class="product-aside">
+          <div class="modal-image" id="modalImage"></div>
+          <div class="mini-attrs" id="modalAttrs"></div>
+        </aside>
+        <section class="product-actions">
+          <p class="sku-line" id="modalSkuTitle"></p>
+          <div class="stock-bar">
+            <div><label>Mediouna</label><strong id="modalMediounaView">0</strong></div>
+            <div><label>Socrate</label><strong id="modalSocrateView">0</strong></div>
+            <div class="total"><label>Total</label><strong id="modalTotalView">0</strong></div>
+          </div>
+
+          <div class="tab-nav">
+            <button class="tab-btn active" data-tab="sale">Sale</button>
+            <button class="tab-btn" data-tab="edit" data-admin-only>Edit</button>
+            <button class="tab-btn" data-tab="history">History</button>
+          </div>
+
+          <div class="tab-content active" id="tab-sale">
+            <div class="action-section sale-section">
+              <h3>Sell from Socrate</h3>
+              <div class="form-row">
+                <label>Quantity sold<input id="sellQty" type="number" min="1" step="1" placeholder="0" /></label>
+                <label>Client / note<input id="sellNote" placeholder="Client, project, commercial..." /></label>
+              </div>
+              <button class="action-btn danger" id="sellBtn">Confirm Sale</button>
+            </div>
+            <div class="action-section receive-section" data-admin-only>
+              <h3>Receive / Add stock</h3>
+              <p class="section-helper">Use this to add new received quantity. It adds to current stock, it does not replace it.</p>
+              <div class="form-row three">
+                <label>Hub<select id="receiveHub"><option value="mediounaQty">Mediouna</option><option value="socrateQty">Socrate</option></select></label>
+                <label>Quantity received<input id="receiveQty" type="number" min="1" step="1" placeholder="0" /></label>
+                <label>BL number<input id="receiveBl" placeholder="BL / delivery note" /></label>
+              </div>
+              <label class="full-label">Note<input id="receiveNote" placeholder="Supplier, date, receiver..." /></label>
+              <button class="action-btn primary" id="singleReceiveBtn">Add Received Stock</button>
+            </div>
+            <div class="action-section" data-admin-only>
+              <h3>Transfer Mediouna → Socrate</h3>
+              <div class="form-row">
+                <label>Quantity<input id="transferQty" type="number" min="1" step="1" placeholder="0" /></label>
+                <label>Note<input id="transferNote" placeholder="BL, date, receiver..." /></label>
+              </div>
+              <button class="action-btn primary" id="transferBtn">Confirm Transfer</button>
+            </div>
+            <div class="action-section" data-admin-only>
+              <h3>Set exact stock / correction</h3>
+              <p class="section-helper">For inventory correction only. This replaces the current stock number.</p>
+              <div class="form-row three">
+                <label>Hub<select id="adjustHub"><option value="mediounaQty">Mediouna</option><option value="socrateQty">Socrate</option></select></label>
+                <label>New quantity<input id="adjustQty" type="number" min="0" step="1" placeholder="0" /></label>
+                <label>Reason<input id="adjustNote" placeholder="Correction, inventory..." /></label>
+              </div>
+              <button class="action-btn ghost" id="adjustBtn">Apply Adjustment</button>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-edit">
+            <div class="form-grid">
+              <label>SKU<input id="editSku" readonly /></label>
+              <label>Name<input id="editName" /></label>
+              <label>Category<input id="editCategory" /></label>
+              <label class="wide">Image URL<input id="editImage" /></label>
+              <label>Price 1<input id="editPrice1" type="text" /></label>
+              <label>Price 2<input id="editPrice2" type="text" /></label>
+              <label>Price 3<input id="editPrice3" type="text" /></label>
+              <label>Low stock alert<input id="editLowStock" type="number" min="0" step="1" /></label>
+              <label>Mediouna Qty<input id="editMediouna" type="number" min="0" step="1" /></label>
+              <label>Socrate Qty<input id="editSocrate" type="number" min="0" step="1" /></label>
+            </div>
+            <button class="action-btn primary full" id="saveProductBtn">Save Product</button>
+            <button class="action-btn danger-outline full" id="deleteProductBtn" type="button">Delete Product</button>
+            <div class="scan-section">
+              <h3>Linked scan photos</h3>
+              <p>Take 2–5 real showroom photos from different angles to improve image search.</p>
+              <label class="scan-upload">📷 Link scan photo<input id="refImageInput" type="file" accept="image/*" capture="environment" /></label>
+              <div class="scan-meta"><span id="refCount">No scans linked</span><button id="clearRefsBtn" class="text-btn" type="button">Clear all</button></div>
+              <div id="refGallery" class="ref-gallery"></div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-history">
+            <div class="history-actions"><button class="text-btn" id="exportHistoryBtn">Export CSV</button><button class="text-btn danger" id="clearHistoryBtn" data-admin-only>Clear History</button></div>
+            <div id="historyList" class="history-list"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <div id="imageModal" class="modal-shell" aria-hidden="true">
+    <section class="modal image-modal" role="dialog" aria-modal="true" aria-labelledby="imageTitle">
+      <header class="modal-header"><button class="modal-back" data-close="imageModal" aria-label="Close image search">‹</button><div class="modal-title"><h2 id="imageTitle">Visual Search</h2></div></header>
+      <div class="modal-body">
+        <p class="modal-desc">Take a product photo. The app compares it with catalog images and linked showroom scans.</p>
+        <label class="upload-zone"><input id="imageInput" type="file" accept="image/*" capture="environment" /><span>📷</span><strong>Take photo / upload image</strong><small>Best with clear light and one product.</small></label>
+        <div id="imageStatus" class="image-status"></div>
+        <div id="imagePreview" class="image-preview"></div>
+        <div id="imageResults" class="image-results"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="usersModal" class="modal-shell" aria-hidden="true">
+    <section class="modal users-modal" role="dialog" aria-modal="true" aria-labelledby="usersTitle">
+      <header class="modal-header"><button class="modal-back" data-close="usersModal" aria-label="Close users">‹</button><div class="modal-title"><h2 id="usersTitle">Team Management</h2></div></header>
+      <div class="modal-body">
+        <div class="users-stats">
+          <div><span id="totalUsers">0</span><label>Total</label></div>
+          <div><span id="activeUsers">0</span><label>Active</label></div>
+          <div><span id="adminUsers">0</span><label>Admins</label></div>
+        </div>
+        <div class="add-user-section">
+          <h3>Add new user</h3>
+          <div class="form-grid compact">
+            <label>Full name<input id="newUserName" placeholder="Name" /></label>
+            <label>Email<input id="newUserEmail" type="email" placeholder="user@lume.ma" /></label>
+            <label>Phone<input id="newUserPhone" inputmode="tel" placeholder="06 XX XX XX XX" /></label>
+            <label>Role<select id="newUserRole"><option value="sales">Sales / Viewer</option><option value="admin">Administrator</option></select></label>
+            <label class="wide">Password<input id="newUserPin" type="password" autocomplete="new-password" placeholder="Minimum 8 characters" /></label>
+          </div>
+          <button class="action-btn primary full" id="addUserBtn">Create User</button>
+        </div>
+        <div class="users-list-header"><h3>Team members</h3><button class="text-btn" id="exportUsersBtn">Export CSV</button></div>
+        <div id="usersList" class="users-list"></div>
+      </div>
+    </section>
+  </div>
+
+
+  <div id="productFormModal" class="modal-shell" aria-hidden="true">
+    <section class="modal product-form-modal" role="dialog" aria-modal="true" aria-labelledby="productFormTitle">
+      <header class="modal-header"><button class="modal-back" data-close="productFormModal" aria-label="Close product form">‹</button><div class="modal-title"><h2 id="productFormTitle">Add Product</h2></div></header>
+      <div class="modal-body">
+        <p class="modal-desc">Create a new product directly inside the stock app. SKU must be unique.</p>
+        <div class="form-grid">
+          <label>SKU / Reference<input id="productSku" placeholder="LM-000" /></label>
+          <label>Name<input id="productName" placeholder="Product name" /></label>
+          <label>Category<input id="productCategory" placeholder="Encastrable, Suspensions..." /></label>
+          <label class="wide">Image URL<input id="productImage" placeholder="https://..." /></label>
+          <label>Price 1<input id="productPrice1" type="text" /></label>
+          <label>Price 2<input id="productPrice2" type="text" /></label>
+          <label>Price 3<input id="productPrice3" type="text" /></label>
+          <label>Low stock alert<input id="productLowStock" type="number" min="0" step="1" value="2" /></label>
+          <label>Mediouna Qty<input id="productMediouna" type="number" min="0" step="1" value="0" /></label>
+          <label>Socrate Qty<input id="productSocrate" type="number" min="0" step="1" value="0" /></label>
+        </div>
+        <button class="action-btn primary full" id="createProductBtn">Create Product</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="bulkReceiveModal" class="modal-shell" aria-hidden="true">
+    <section class="modal bulk-receive-modal" role="dialog" aria-modal="true" aria-labelledby="bulkReceiveTitle">
+      <header class="modal-header"><button class="modal-back" data-close="bulkReceiveModal" aria-label="Close receive form">‹</button><div class="modal-title"><h2 id="bulkReceiveTitle">New BL / Receive Stock</h2></div></header>
+      <div class="modal-body">
+        <p class="modal-desc">Select many received products at once, enter quantities, then confirm. This adds stock to the selected hub.</p>
+        <div class="form-grid compact receive-meta">
+          <label>BL number<input id="bulkReceiveBl" placeholder="BL / delivery note" /></label>
+          <label>Date<input id="bulkReceiveDate" type="date" /></label>
+          <label>Destination<select id="bulkReceiveHub"><option value="mediounaQty">Mediouna</option><option value="socrateQty">Socrate</option></select></label>
+          <label>Note<input id="bulkReceiveNote" placeholder="Supplier, receiver..." /></label>
+        </div>
+        <div class="search-bar receive-search"><span>⌕</span><input id="bulkReceiveSearch" type="search" placeholder="Search products to receive..." autocomplete="off" /></div>
+        <div class="receive-toolbar"><strong id="bulkReceiveSummary">0 products selected · 0 pcs total</strong><button id="bulkReceiveClearBtn" type="button" class="text-btn">Clear</button></div>
+        <div id="bulkReceiveRows" class="bulk-receive-rows"></div>
+        <button class="action-btn primary full sticky-confirm" id="bulkReceiveConfirmBtn">Confirm Received Stock</button>
+      </div>
+    </section>
+  </div>
+  <div id="historyModal" class="modal-shell" aria-hidden="true">
+    <section class="modal history-modal" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+      <header class="modal-header"><button class="modal-back" data-close="historyModal" aria-label="Close history">‹</button><div class="modal-title"><h2 id="historyTitle">Movement History</h2></div></header>
+      <div class="modal-body">
+        <p class="modal-desc">All stock movements across Mediouna and Socrate. Filter by product, type, hub, BL, or date period.</p>
+        <div class="history-filters">
+          <div class="search-bar"><span>⌕</span><input id="historySearch" type="search" placeholder="Search SKU, name, user, note…" autocomplete="off" /></div>
+          <div class="filter-row">
+            <select id="historyTypeFilter"><option value="all">All types</option><option value="RECEIVE">Receive</option><option value="TRANSFER">Transfer</option><option value="SALE">Sale</option><option value="ADJUST">Adjust</option><option value="DELETE">Delete</option><option value="RESTORE">Restore</option><option value="CREATE">Create</option><option value="EDIT">Edit</option></select>
+            <select id="historyHubFilter"><option value="all">All hubs</option><option value="MEDIOUNA">Mediouna</option><option value="SOCRATE">Socrate</option><option value="BL">BL / Supplier</option></select>
+            <select id="historyCategoryFilter"><option value="all">All categories</option></select>
+          </div>
+          <div class="filter-row">
+            <label>From<input id="historyDateFrom" type="date" /></label>
+            <label>To<input id="historyDateTo" type="date" /></label>
+            <input id="historyBlFilter" type="search" placeholder="BL number…" />
+          </div>
+          <div class="history-quick-filters">
+            <button type="button" id="historyTodayBtn" class="text-btn">Today</button>
+            <button type="button" id="historyMonthBtn" class="text-btn">This month</button>
+            <button type="button" id="historyClearPeriodBtn" class="text-btn">Clear period</button>
+            <button type="button" id="exportGlobalHistoryBtn" class="text-btn">Export CSV</button>
+          </div>
+        </div>
+        <p id="globalHistoryCount" class="results-info">0 movements</p>
+        <div id="globalHistoryList" class="history-list global-history-list"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="restoreModal" class="modal-shell" aria-hidden="true">
+    <section class="modal restore-modal" role="dialog" aria-modal="true" aria-labelledby="restoreTitle">
+      <header class="modal-header"><button class="modal-back" data-close="restoreModal" aria-label="Close restore">‹</button><div class="modal-title"><h2 id="restoreTitle">Restore Deleted Products</h2></div></header>
+      <div class="modal-body">
+        <p class="modal-desc">Soft-deleted products are kept here with their stock data. Restore to bring them back to the catalog.</p>
+        <p id="restoreCount" class="results-info">0 deleted products</p>
+        <div id="restoreList" class="restore-list"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="products-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
